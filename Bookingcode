@@ -1,0 +1,615 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Calendar } from '@/components/ui/calendar';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { CalendarIcon, CheckCircle, CreditCard, Hotel, MapPin, User, Users } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { format, addDays } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Mock Data (Replace with your actual Firebase data and API calls)
+interface Location {
+    id: string;
+    name: string;
+    description: string;
+    imageUrl: string;
+    bestTimeToVisit: string;
+    mustVisitPlaces: string[];
+    hotels: Hotel[];
+}
+
+interface Hotel {
+    id: string;
+    name: string;
+    description: string;
+    imageUrl: string;
+    pricePerNight: number;
+    amenities: string[];
+    rooms: Room[];
+}
+
+interface Room {
+    id: string;
+    type: 'single' | 'double' | 'deluxe';
+    capacity: number;
+    available: boolean;
+}
+
+const mockLocations: Location[] = [
+    {
+        id: 'location1',
+        name: 'Paris, France',
+        description: 'The City of Love offers iconic landmarks like the Eiffel Tower, Louvre Museum, and charming cafes.',
+        imageUrl: 'https://placehold.co/600x400/333/FFF?text=Paris&font=Montserrat',
+        bestTimeToVisit: 'Spring (April-June) and Autumn (September-November)',
+        mustVisitPlaces: [
+            'Eiffel Tower',
+            'Louvre Museum',
+            'Notre-Dame Cathedral',
+            'Arc de Triomphe',
+            'Seine River Cruise',
+        ],
+        hotels: [
+            {
+                id: 'hotel1',
+                name: 'Hotel Plaza Athénée',
+                description: 'Luxury hotel with Eiffel Tower views, Michelin-starred dining, and a Dior Spa.',
+                imageUrl: 'https://placehold.co/400x300/444/EEE?text=Plaza+Athenee&font=Montserrat',
+                pricePerNight: 1200,
+                amenities: ['Free Wi-Fi', 'Spa', 'Fitness Center', 'Fine Dining'],
+                rooms: [
+                    { id: 'room1', type: 'single', capacity: 1, available: true },
+                    { id: 'room2', type: 'double', capacity: 2, available: true },
+                    { id: 'room3', type: 'deluxe', capacity: 2, available: false },
+                ],
+            },
+            {
+                id: 'hotel2',
+                name: 'Le Bristol Paris',
+                description: 'Elegant hotel with a beautiful courtyard, rooftop pool, and a three-Michelin-starred restaurant.',
+                imageUrl: 'https://placehold.co/400x300/555/FFF?text=Le+Bristol&font=Montserrat',
+                pricePerNight: 1000,
+                amenities: ['Free Wi-Fi', 'Pool', 'Garden', 'Gourmet Dining'],
+                rooms: [
+                    { id: 'room4', type: 'single', capacity: 1, available: true },
+                    { id: 'room5', type: 'double', capacity: 2, available: true },
+                    { id: 'room6', type: 'deluxe', capacity: 2, available: true },
+                ],
+            },
+        ],
+    },
+    {
+        id: 'location2',
+        name: 'Tokyo, Japan',
+        description: 'A vibrant city with a mix of modern skyscrapers, traditional temples, and delicious cuisine.',
+        imageUrl: 'https://placehold.co/600x400/444/FFF?text=Tokyo&font=Montserrat',
+        bestTimeToVisit: 'Spring (March-May) and Autumn (September-November)',
+        mustVisitPlaces: [
+            'Tokyo Tower',
+            'Senso-ji Temple',
+            'Shibuya Crossing',
+            'Ueno Park',
+            'Ghibli Museum',
+        ],
+        hotels: [
+            {
+                id: 'hotel3',
+                name: 'The Peninsula Tokyo',
+                description: 'Luxury hotel with stunning city views, exceptional service, and a prime location.',
+                imageUrl: 'https://placehold.co/400x300/666/EEE?text=Peninsula+Tokyo&font=Montserrat',
+                pricePerNight: 900,
+                amenities: ['Free Wi-Fi', 'Spa', 'City Views', 'Concierge'],
+                rooms: [
+                    { id: 'room7', type: 'single', capacity: 1, available: true },
+                    { id: 'room8', type: 'double', capacity: 2, available: false },
+                    { id: 'room9', type: 'deluxe', capacity: 2, available: true },
+                ],
+            },
+            {
+                id: 'hotel4',
+                name: 'Park Hyatt Tokyo',
+                description: 'Iconic hotel featured in "Lost in Translation," offering panoramic views and sophisticated ambiance.',
+                imageUrl: 'https://placehold.co/400x300/777/FFF?text=Park+Hyatt+Tokyo&font=Montserrat',
+                pricePerNight: 800,
+                amenities: ['Free Wi-Fi', 'Pool', 'Skyline Views', 'Library'],
+                rooms: [
+                    { id: 'room10', type: 'single', capacity: 1, available: true },
+                    { id: 'room11', type: 'double', capacity: 2, available: true },
+                    { id: 'room12', type: 'deluxe', capacity: 2, available: true },
+                ],
+            },
+        ],
+    },
+];
+
+// Animation Variants
+const locationCardVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+    exit: { opacity: 0, y: -20, transition: { duration: 0.2 } },
+};
+
+const hotelCardVariants = {
+    hidden: { opacity: 0, x: -20 },
+    visible: { opacity: 1, x: 0, transition: { duration: 0.3, delay: 0.1 } },
+    exit: { opacity: 0, x: 20, transition: { duration: 0.2 } },
+};
+
+const bookingFormVariants = {
+    hidden: { opacity: 0, scale: 0.9 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.4, type: 'spring', stiffness: 120 } },
+    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } },
+};
+
+const confirmationVariants = {
+    hidden: { opacity: 0, scale: 0.8 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.5, type: 'spring', stiffness: 100 } },
+    exit: { opacity: 0, scale: 0.9, transition: { duration: 0.3 } },
+};
+
+const BookingApp = () => {
+    const [locations, setLocations] = useState<Location[]>([]);
+    const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
+    const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
+    const [checkInDate, setCheckInDate] = useState<Date | undefined>();
+    const [checkOutDate, setCheckOutDate] = useState<Date | undefined>();
+    const [numberOfGuests, setNumberOfGuests] = useState<number>(1);
+    const [bookingDetails, setBookingDetails] = useState<{
+        hotelName: string;
+        locationName: string;
+        checkIn: string;
+        checkOut: string;
+        guests: number;
+        totalPrice: number;
+        roomType: string;
+    } | null>(null);
+    const [isBookingConfirmed, setIsBookingConfirmed] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Fetch locations (replace with your actual Firebase data fetching)
+    useEffect(() => {
+        setLoading(true);
+        // Simulate fetching data from Firebase
+        const timer = setTimeout(() => {
+            setLocations(mockLocations);
+            setLoading(false);
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const handleLocationSelect = (location: Location) => {
+        setSelectedLocation(location);
+        setSelectedHotel(null); // Reset hotel selection when location changes
+        setBookingDetails(null);
+        setIsBookingConfirmed(false);
+        setError(null);
+    };
+
+    const handleHotelSelect = (hotel: Hotel) => {
+        setSelectedHotel(hotel);
+        setBookingDetails(null); // Reset booking details when hotel changes
+        setIsBookingConfirmed(false);
+        setError(null);
+    };
+
+    const handleDateChange = (date: { from?: Date | undefined; to?: Date | undefined }) => {
+        setCheckInDate(date?.from);
+        setCheckOutDate(date?.to);
+    };
+
+    const calculateTotalPrice = useCallback(
+        (hotel: Hotel, checkIn: Date | undefined, checkOut: Date | undefined, guests: number, roomType: string) => {
+            if (!checkIn || !checkOut || !hotel) return 0;
+
+            const diffInDays = Math.ceil(Math.abs(checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
+            const room = hotel.rooms.find(r => r.type === roomType);
+            if (!room || !room.available || guests > room.capacity) return 0;
+
+            return diffInDays * hotel.pricePerNight;
+        },
+        []
+    );
+
+    const handleBooking = () => {
+        if (!selectedHotel || !checkInDate || !checkOutDate) {
+            setError('Please select a hotel, check-in date, and check-out date.');
+            return;
+        }
+
+        const roomType = 'double'; // For simplicity, we'll just book a double room.  Expand this later.
+        const totalPrice = calculateTotalPrice(selectedHotel, checkInDate, checkOutDate, numberOfGuests, roomType);
+
+        if (totalPrice <= 0) {
+            setError('Selected room is unavailable or exceeds capacity.');
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+
+        // Simulate booking process (replace with your actual Firebase/backend logic)
+        setTimeout(() => {
+            // In a real app, you'd:
+            // 1.  Update the hotel's room availability in the database.
+            // 2.  Create a booking record in the database.
+            // 3.  Process the payment (using a payment gateway).
+            // 4.  Send confirmation emails.
+
+            setBookingDetails({
+                hotelName: selectedHotel.name,
+                locationName: selectedLocation?.name || 'Unknown Location',
+                checkIn: format(checkInDate, 'PPP'),
+                checkOut: format(checkOutDate, 'PPP'),
+                guests: numberOfGuests,
+                totalPrice,
+                roomType,
+            });
+            setIsBookingConfirmed(true);
+            setLoading(false);
+        }, 2000);
+    };
+
+    const resetBooking = () => {
+        setSelectedHotel(null);
+        setCheckInDate(undefined);
+        setCheckOutDate(undefined);
+        setNumberOfGuests(1);
+        setBookingDetails(null);
+        setIsBookingConfirmed(false);
+        setError(null);
+    };
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4 sm:p-8">
+            <div className="max-w-7xl mx-auto space-y-8">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                    Book Your Dream Getaway
+                </h1>
+
+                <AnimatePresence>
+                    {!selectedLocation && (
+                        <motion.div
+                            initial="hidden"
+                            animate="visible"
+                            exit="exit"
+                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+                        >
+                            {locations.map((location) => (
+                                <motion.div
+                                    key={location.id}
+                                    variants={locationCardVariants}
+                                    whileHover={{ scale: 1.03 }}
+                                    whileTap={{ scale: 0.98 }}
+                                >
+                                    <Card
+                                        className="bg-white/5 backdrop-blur-md border border-white/10 hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
+                                        onClick={() => handleLocationSelect(location)}
+                                    >
+                                        <CardHeader>
+                                            <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
+                                                <MapPin className="w-5 h-5 text-blue-400" />
+                                                {location.name}
+                                            </CardTitle>
+                                            <CardDescription className="text-gray-300">
+                                                {location.description.substring(0, 100)}...
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="aspect-w-16 aspect-h-9">
+                                                <img
+                                                    src={location.imageUrl}
+                                                    alt={location.name}
+                                                    className="rounded-lg object-cover w-full h-full"
+                                                />
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </motion.div>
+                            ))}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                    {selectedLocation && !selectedHotel && (
+                        <motion.div
+                            initial="hidden"
+                            animate="visible"
+                            exit="exit"
+                            className="space-y-6"
+                        >
+                            <div className="bg-white/5 backdrop-blur-md rounded-lg p-6 border border-white/10">
+                                <h2 className="text-2xl font-semibold text-white flex items-center gap-2">
+                                    <MapPin className="w-6 h-6 text-blue-400" />
+                                    {selectedLocation.name}
+                                </h2>
+                                <p className="text-gray-300">{selectedLocation.description}</p>
+                                <p className="text-gray-300">
+                                    <span className="font-semibold text-blue-300">Best Time to Visit:</span>{' '}
+                                    {selectedLocation.bestTimeToVisit}
+                                </p>
+                                <div className="mt-4">
+                                    <h3 className="text-lg font-semibold text-white">Must-Visit Places:</h3>
+                                    <ul className="list-disc list-inside text-gray-300 space-y-1">
+                                        {selectedLocation.mustVisitPlaces.map((place, index) => (
+                                            <li key={index}>{place}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <motion.div
+                                className="grid grid-cols-1 sm:grid-cols-2 gap-6"
+                                initial="hidden"
+                                animate="visible"
+                                exit="exit"
+                            >
+                                {selectedLocation.hotels.map((hotel) => (
+                                    <motion.div
+                                        key={hotel.id}
+                                        variants={hotelCardVariants}
+                                        whileHover={{ scale: 1.03 }}
+                                        whileTap={{ scale: 0.98 }}
+                                    >
+                                        <Card
+                                            className="bg-white/5 backdrop-blur-md border border-white/10 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer"
+                                            onClick={() => handleHotelSelect(hotel)}
+                                        >
+                                            <CardHeader>
+                                                <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
+                                                    <Hotel className="w-5 h-5 text-purple-400" />
+                                                    {hotel.name}
+                                                </CardTitle>
+                                                <CardDescription className="text-gray-300">
+                                                    {hotel.description.substring(0, 100)}...
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="aspect-w-16 aspect-h-9">
+                                                    <img
+                                                        src={hotel.imageUrl}
+                                                        alt={hotel.name}
+                                                        className="rounded-lg object-cover w-full h-full"
+                                                    />
+                                                </div>
+                                                <p className="mt-4 text-lg font-semibold text-yellow-400">
+                                                    ${hotel.pricePerNight} / night
+                                                </p>
+                                            </CardContent>
+                                        </Card>
+                                    </motion.div>
+                                ))}
+                            </motion.div>
+                            <Button
+                                variant="outline"
+                                className="bg-white/10 text-white hover:bg-white/20 border-white/20"
+                                onClick={() => setSelectedLocation(null)}
+                            >
+                                ← Back to Locations
+                            </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                    {selectedHotel && (
+                        <motion.div
+                            initial="hidden"
+                            animate="visible"
+                            exit="exit"
+                            variants={bookingFormVariants}
+                            className="bg-white/5 backdrop-blur-md rounded-lg p-6 border border-white/10 space-y-6"
+                        >
+                            <h2 className="text-2xl font-semibold text-white flex items-center gap-2">
+                                <Hotel className="w-6 h-6 text-purple-400" />
+                                Book Your Stay at {selectedHotel.name}
+                            </h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <div className="aspect-w-16 aspect-h-9">
+                                        <img
+                                            src={selectedHotel.imageUrl}
+                                            alt={selectedHotel.name}
+                                            className="rounded-lg object-cover w-full h-full"
+                                        />
+                                    </div>
+                                    <p className="mt-4 text-lg font-semibold text-yellow-400">
+                                        ${selectedHotel.pricePerNight} / night
+                                    </p>
+                                    <p className="mt-2 text-gray-300">{selectedHotel.description}</p>
+                                    <div className="mt-4">
+                                        <h3 className="text-lg font-semibold text-white">Amenities:</h3>
+                                        <ul className="list-disc list-inside text-gray-300 space-y-1">
+                                            {selectedHotel.amenities.map((amenity, index) => (
+                                                <li key={index}>{amenity}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label htmlFor="guests" className="block text-sm font-medium text-gray-200">
+                                            Number of Guests
+                                        </label>
+                                        <Input
+                                            id="guests"
+                                            type="number"
+                                            min="1"
+                                            value={numberOfGuests}
+                                            onChange={(e) => setNumberOfGuests(parseInt(e.target.value, 10) || 1)}
+                                            className="mt-1 bg-black/20 text-white border-purple-500/30"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-200">
+                                            Select Dates
+                                        </label>
+                                        <div className="mt-1">
+                                            <Calendar
+                                                mode="range"
+                                                selected={{
+                                                    from: checkInDate,
+                                                    to: checkOutDate,
+                                                }}
+                                                onSelect={handleDateChange}
+                                                className="rounded-md bg-white/5 text-white border-purple-500/30"
+                                                style={{
+                                                    '--calendar-border-radius': '0.5rem',
+                                                    '--calendar-background': '#rgba(255, 255, 255, 0.05)',
+                                                    '--calendar-text-color': '#e5e7eb',
+                                                    '--calendar-day-hover-background': '#rgba(255, 255, 255, 0.1)',
+                                                    '--calendar-day-selected-background': '#8b5cf6',
+                                                    '--calendar-day-selected-text-color': '#fff',
+                                                    '--calendar-month-title-color': '#fff',
+                                                    '--calendar-nav-button-color': '#fff',
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label htmlFor="roomType" className="block text-sm font-medium text-gray-200">
+                                            Room Type
+                                        </label>
+                                        <Select
+                                            defaultValue="double" // Set a default value
+                                            className="mt-1 w-full"
+                                            onValueChange={() => {}}
+                                        >
+                                            <SelectTrigger className="w-full bg-black/20 text-white border-purple-500/30">
+                                                <SelectValue placeholder="Select a room type" />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-gray-800 border-purple-500/30">
+                                                <SelectItem value="single" className="hover:bg-purple-500/20 text-white">Single</SelectItem>
+                                                <SelectItem value="double" className="hover:bg-purple-500/20 text-white">Double</SelectItem>
+                                                <SelectItem value="deluxe" className="hover:bg-purple-500/20 text-white">Deluxe</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {error && (
+                                        <p className="text-red-400 text-sm mt-2">{error}</p>
+                                    )}
+
+                                    <Button
+                                        onClick={handleBooking}
+                                        disabled={loading}
+                                        className="w-full bg-purple-500 text-white hover:bg-purple-600 transition-colors duration-200 flex items-center justify-center gap-2"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <svg
+                                                    className="animate-spin h-5 w-5 mr-3"
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <circle
+                                                        className="opacity-25"
+                                                        cx="12"
+                                                        cy="12"
+                                                        r="10"
+                                                        stroke="currentColor"
+                                                        strokeWidth="4"
+                                                    ></circle>
+                                                    <path
+                                                        className="opacity-75"
+                                                        fill="currentColor"
+                                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                                    ></path>
+                                                </svg>
+                                                Booking...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CreditCard className="w-5 h-5" />
+                                                Confirm Booking
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <Button
+                                variant="outline"
+                                className="bg-white/10 text-white hover:bg-white/20 border-white/20"
+                                onClick={() => setSelectedHotel(null)}
+                            >
+                                ← Back to Hotels
+                            </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                    {isBookingConfirmed && bookingDetails && (
+                        <motion.div
+                            initial="hidden"
+                            animate="visible"
+                            exit="exit"
+                            variants={confirmationVariants}
+                            className="bg-white/5 backdrop-blur-md rounded-lg p-6 border border-white/10 space-y-4 text-center"
+                        >
+                            <h2 className="text-2xl font-semibold text-green-400 flex items-center justify-center gap-2">
+                                <CheckCircle className="w-6 h-6" />
+                                Booking Confirmed!
+                            </h2>
+                            <p className="text-gray-300">
+                                Thank you for your booking.  Here are your details:
+                            </p>
+                            <div className="text-left space-y-2">
+                                <p className="text-white">
+                                    <span className="font-semibold text-blue-300">Location:</span> {bookingDetails.locationName}
+                                </p>
+                                <p className="text-white">
+                                    <span className="font-semibold text-blue-300">Hotel:</span> {bookingDetails.hotelName}
+                                </p>
+                                <p className="text-white">
+                                    <span className="font-semibold text-blue-300">Check-in:</span> {bookingDetails.checkIn}
+                                </p>
+                                <p className="text-white">
+                                    <span className="font-semibold text-blue-300">Check-out:</span> {bookingDetails.checkOut}
+                                </p>
+                                <p className="text-white">
+                                    <span className="font-semibold text-blue-300">Guests:</span> {bookingDetails.guests}
+                                </p>
+                                <p className="text-white">
+                                    <span className="font-semibold text-blue-300">Room Type:</span> {bookingDetails.roomType}
+                                </p>
+                                <p className="text-xl font-bold text-yellow-400">
+                                    <span className="font-semibold text-blue-300">Total Price:</span> ${bookingDetails.totalPrice}
+                                </p>
+                            </div>
+                            <Button
+                                onClick={resetBooking}
+                                className="w-full bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200"
+                            >
+                                Start New Booking
+                            </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </div>
+    );
+};
+
+export default BookingApp;
